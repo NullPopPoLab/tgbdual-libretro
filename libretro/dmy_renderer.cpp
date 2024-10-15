@@ -145,14 +145,14 @@ void dmy_renderer::refresh() {
 
 int dmy_renderer::check_pad()
 {
-   int16_t joypad_bits;
+   int32_t joypad_bits;
    if (libretro_supports_bitmasks)
       joypad_bits = input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
    else
    {
       unsigned i;
       joypad_bits = 0;
-      for (i = 0; i < (RETRO_DEVICE_ID_JOYPAD_R3 + 1); i++)
+      for (i = 0; i < RETRO_DEVICE_ID_JOYPAD_BUTTON_MAX; i++)
          joypad_bits |= input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
    }
 
