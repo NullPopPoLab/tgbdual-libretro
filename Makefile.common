@@ -15,4 +15,9 @@ SOURCES_CXX := $(CORE_DIR)/gb_core/apu.cpp \
 	$(CORE_DIR)/gb_core/mbc.cpp \
 	$(CORE_DIR)/gb_core/rom.cpp \
 	$(CORE_DIR)/libretro/dmy_renderer.cpp \
-	$(CORE_DIR)/libretro/libretro.cpp
+	$(CORE_DIR)/libretro/libretro.cpp \
+	$(CORE_DIR)/mk5s/advanced_m3u.c \
+	$(CORE_DIR)/mk5s/quick_loader.c \
+	$(CORE_DIR)/mk5s/quick_path.c \
+	$(CORE_DIR)/mk5s/quick_text.c \
+	$(CORE_DIR)/mk5s/safe_alloc.c

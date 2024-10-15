@@ -39,6 +39,7 @@ extern retro_environment_t environ_cb;
 extern bool gblink_enable;
 
 extern int audio_2p_mode;
+extern bool get_drive_eject_state(unsigned drv);
 
 #define MSG_FRAMES 60
 #define SAMPLES_PER_FRAME (44100/60)
@@ -107,7 +108,7 @@ word dmy_renderer::unmap_color(word gb_col)
 void dmy_renderer::refresh() {
    static int16_t stream[SAMPLES_PER_FRAME*2];
 
-   if (g_gb[1] && gblink_enable)
+   if (1/*g_gb[1] && gblink_enable*/)
    {
       // if dual gb mode
       if (audio_2p_mode == 2)
@@ -126,7 +127,8 @@ void dmy_renderer::refresh() {
          // only play gb 0 or 1
          this->snd_render->render(stream, SAMPLES_PER_FRAME);
       }
-      if (which_gb == 1)
+
+      if (which_gb == get_drive_eject_state(1)?0:1)
       {
          // only do audio callback after both gb's are rendered.
          audio_batch_cb(stream, SAMPLES_PER_FRAME);
@@ -178,7 +180,7 @@ void dmy_renderer::render_screen(byte *buf,int width,int height,int depth)
       switched_gb = 1 - switched_gb;
 
    // are we running two gb's?
-   if(g_gb[1] && gblink_enable)
+   if(1/*g_gb[1] && gblink_enable*/)
    {
       // are we drawing both gb's to the screen?
       if (_show_player_screens == 2)
@@ -186,14 +188,14 @@ void dmy_renderer::render_screen(byte *buf,int width,int height,int depth)
          if(_screen_2p_vertical)
          {
             memcpy(joined_buf + switched_gb*half, buf, half);
-            if(which_gb == 1)
+            if(which_gb == get_drive_eject_state(1)?0:1)
                video_cb(joined_buf, width, height*2, pitch);
          }
          else
          {
             for (int row = 0; row < height; ++row)
                memcpy(joined_buf + pitch*(2*row + switched_gb), buf+pitch*row, pitch);
-            if(which_gb == 1)
+            if(which_gb == get_drive_eject_state(1)?0:1)
                video_cb(joined_buf, width*2, height, pitch*2);
          }
       }
@@ -203,7 +205,7 @@ void dmy_renderer::render_screen(byte *buf,int width,int height,int depth)
          // (this ignores the "switch player screens" setting)
          if (_show_player_screens == which_gb)
             memcpy(joined_buf, buf, half);
-         if (which_gb == 1)
+         if (which_gb == get_drive_eject_state(1)?0:1)
             video_cb(joined_buf, width, height, pitch);
       }
    }

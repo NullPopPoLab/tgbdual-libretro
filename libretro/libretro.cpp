@@ -7,6 +7,9 @@
 #include "libretro.h"
 #include "../gb_core/gb.h"
 #include "dmy_renderer.h"
+#include "../mk5s/advanced_m3u.h"
+#include "../mk5s/quick_loader.h"
+#include "../mk5s/quick_path.h"
 
 #define RETRO_MEMORY_GAMEBOY_1_SRAM ((1 << 8) | RETRO_MEMORY_SAVE_RAM)
 #define RETRO_MEMORY_GAMEBOY_1_RTC ((2 << 8) | RETRO_MEMORY_RTC)
@@ -14,6 +17,8 @@
 #define RETRO_MEMORY_GAMEBOY_2_RTC ((3 << 8) | RETRO_MEMORY_RTC)
 
 #define RETRO_GAME_TYPE_GAMEBOY_LINK_2P 0x101
+
+#define MAX_ROM_VALIANT 8
 
 static const struct retro_variable vars_single[] = {
     { "tgbdual_gblink_enable", "Link cable emulation (reload); disabled|enabled" },
@@ -59,6 +64,7 @@ static enum mode mode = MODE_SINGLE_GAME;
 
 gb *g_gb[2];
 dmy_renderer *render[2];
+QLoaded* g_gb_rom[MAX_ROM_VALIANT]={NULL};
 
 retro_log_printf_t log_cb;
 retro_video_refresh_t video_cb;
@@ -71,6 +77,10 @@ extern bool _screen_2p_vertical;
 extern bool _screen_switched;
 extern int _show_player_screens;
 static size_t _serialize_size[2]         = { 0, 0 };
+static bool gblinked[2]={false,false};
+
+static struct retro_disk_control_ext2_callback dskcb;
+static unsigned diskidx=0;
 
 bool gblink_enable                       = false;
 int audio_2p_mode                        = 0;
@@ -80,6 +90,9 @@ bool libretro_supports_persistent_buffer = false;
 bool libretro_supports_bitmasks          = false;
 struct retro_system_av_info *my_av_info  = (retro_system_av_info*)malloc(sizeof(*my_av_info));
 
+static AdvancedM3U *g_am3u=NULL;
+static AdvancedM3UDevice *g_am3u_rom=NULL;
+
 void retro_get_system_info(struct retro_system_info *info)
 {
    info->library_name     = "TGB Dual";
@@ -88,7 +101,7 @@ void retro_get_system_info(struct retro_system_info *info)
 #endif
    info->library_version  = "v0.8.3" GIT_VERSION;
    info->need_fullpath    = false;
-   info->valid_extensions = "gb|dmg|gbc|cgb|sgb";
+   info->valid_extensions = "gb|dmg|gbc|cgb|sgb|m3u";
 }
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
@@ -97,7 +110,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    info->geometry.max_width = w * 2;
    info->geometry.max_height = h * 2;
 
-   if (g_gb[1] && _show_player_screens == 2)
+   if (/*g_gb[1] &&*/ _show_player_screens == 2)
    {
       // screen orientation for dual gameboy mode
       if(_screen_2p_vertical)
@@ -114,7 +127,147 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    memcpy(my_av_info, info, sizeof(*my_av_info));
 }
 
+static bool gb_startup(int slot, byte* data,size_t size,bool persistent)
+{
+   if(!render[slot]) render[slot] = new dmy_renderer(slot);
+   if(!g_gb[slot]) g_gb[slot]   = new gb(render[slot], true, true);
+	if(!g_gb[slot]->load_rom(data, size, NULL, 0, persistent))return false;
 
+	if(gblink_enable && g_gb[1-slot]){
+		gblinked[slot]=true;
+		g_gb[slot]->set_target(g_gb[1-slot]);
+		if(!gblinked[1-slot]){
+			gblinked[1-slot]=true;
+			g_gb[1-slot]->set_target(g_gb[slot]);
+		}
+	}
+
+	return true;
+}
+
+static void gb_shutdown(int slot,bool reset)
+{
+	if (!g_gb[slot]) return;
+
+	if(gblinked[1-slot]){
+		gblinked[1-slot]=false;
+		g_gb[1-slot]->set_target(NULL);
+	}
+	if(gblinked[slot]){
+		gblinked[slot]=false;
+		g_gb[slot]->set_target(NULL);
+	}
+
+	delete g_gb[slot];
+	g_gb[slot] = NULL;
+	delete render[slot];
+	render[slot] = NULL;
+
+	if(!reset)return;
+
+   if(!render[slot]) render[slot] = new dmy_renderer(slot);
+   if(!g_gb[slot]) g_gb[slot]   = new gb(render[slot], true, true);
+}
+
+static bool set_drive_eject_state(unsigned drv, bool ejected)
+{
+	if(!g_am3u_rom)return false;
+
+	if(ejected){
+		gb_shutdown(drv,true);
+		am3u_device_remove_media(g_am3u_rom,drv);
+	}
+	else{
+		am3u_device_set_media(g_am3u_rom,drv,diskidx);
+
+		int romidx=g_am3u_rom->slot_tbl[drv];
+		if(!gb_startup(drv, (byte*)qloaded_bgn(g_gb_rom[romidx]), g_gb_rom[romidx]->readsize, libretro_supports_persistent_buffer))return false;
+	}
+	return true;
+}
+
+bool get_drive_eject_state(unsigned drv)
+{
+	if(!g_am3u_rom)return false;
+
+   return !am3u_device_get_media(g_am3u_rom,drv);
+}
+
+static unsigned get_image_index(void)
+{
+   return diskidx;
+}
+
+static bool set_image_index(unsigned index)
+{
+   diskidx = index;
+   return true;
+}
+
+static unsigned get_num_drives(void)
+{
+   return 2;
+}
+
+static unsigned get_num_images(void)
+{
+	if(!g_am3u_rom)return 1;
+
+   return g_am3u_rom->changee_used;
+}
+
+static bool disk_get_image_path(unsigned index, char *path, size_t len)
+{
+   if (len < 1) return false;
+	if(!g_am3u_rom)return false;
+
+	AdvancedM3UMedia* media=&g_am3u_rom->changee_tbl[index];
+	if(!media)return false;
+	if(!media->path)return false;
+
+    strncpy(path, media->path, len);
+    return true;
+}
+
+static bool disk_get_image_label(unsigned index, char *label, size_t len)
+{
+   if (len < 1) return false;
+	if(!g_am3u_rom)return false;
+
+	AdvancedM3UMedia* media=&g_am3u_rom->changee_tbl[index];
+	if(!media)return false;
+	char* src=media->label;
+	if(!src)src=media->path;
+	if(!src)return false;
+
+    strncpy(label, src, len);
+    return true;
+}
+
+static int disk_get_drive_image_index(unsigned drive)
+{
+	if(drive>=get_num_drives())return -1;
+	if(get_drive_eject_state(drive))return -1;
+	if(!g_am3u_rom)return -1;
+
+	return g_am3u_rom->slot_tbl[drive];	
+}
+
+void attach_disk_swap_interface(void)
+{
+   memset(&dskcb,0,sizeof(dskcb));
+   dskcb.set_drive_eject_state = set_drive_eject_state;
+   dskcb.get_drive_eject_state = get_drive_eject_state;
+   dskcb.set_image_index = set_image_index;
+   dskcb.get_image_index = get_image_index;
+   dskcb.get_num_drives  = get_num_drives;
+   dskcb.get_num_images  = get_num_images;
+   dskcb.get_image_path = disk_get_image_path;
+   dskcb.get_image_label = disk_get_image_label;
+   dskcb.get_drive_image_index = disk_get_drive_image_index;
+
+   environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT2_INTERFACE, &dskcb);
+}
 
 void retro_init(void)
 {
@@ -130,6 +283,8 @@ void retro_init(void)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
       libretro_supports_bitmasks = true;
+
+   attach_disk_swap_interface();
 }
 
 void retro_deinit(void)
@@ -198,7 +353,7 @@ static void check_variables(void)
       _show_player_screens = 2;
 
    int screenw = 160, screenh = 144;
-   if (gblink_enable && _show_player_screens == 2)
+   if (/*gblink_enable &&*/ _show_player_screens == 2)
    {
       if (_screen_2p_vertical)
          screenh *= 2;
@@ -226,12 +381,28 @@ static void check_variables(void)
       _screen_switched = false;
 }
 
+static bool am3u_error(void* user,int code,int lineloc,const QTextRef* line){
+
+   if (!log_cb) return true;
+
+	char* msg=qtext_alloc_q(line);
+
+	  log_cb(RETRO_LOG_ERROR,
+                      "M3U error %d in line %d: %s\n",
+                      code,lineloc,msg);
+	
+	qtext_free(&msg);
+
+	return true;
+}
 
 bool retro_load_game(const struct retro_game_info *info)
 {
    size_t rom_size;
    byte *rom_data;
    const struct retro_game_info_ext *info_ext = NULL;
+	int romidx;
+
    environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_single);
    check_variables();
 
@@ -262,6 +433,36 @@ bool retro_load_game(const struct retro_game_info *info)
    if (!info)
       return false;
 
+	QTextRef ext;
+	if(!qpath_extension_c(&ext,info->path,false));
+	else if(!strcasecmp(qtext_bgn(&ext),"m3u")){
+		QLoaded* img=qload(info->path,false);
+		if(img){
+			QTextRef m3udir;
+			qpath_dirname_c(&m3udir,info->path);
+			QTextRef imgref;
+			qtext_ref_q(&imgref,(const char*)qloaded_bgn(img),img->readsize);
+			g_am3u=am3u_new();
+			am3u_set_default_device(g_am3u,'R');
+			g_am3u_rom=am3u_get_device(g_am3u,'R');
+			am3u_device_set_changer(g_am3u_rom,MAX_ROM_VALIANT);
+			am3u_device_set_slots(g_am3u_rom,2);
+			am3u_setup_q(g_am3u,&imgref,&m3udir,am3u_error,NULL);
+			qunload(&img);
+
+			for(i=0;i<MAX_ROM_VALIANT;++i){
+				if(g_am3u_rom->changee_tbl[i].path)
+					g_gb_rom[i]=qload(g_am3u_rom->changee_tbl[i].path,false);
+				else g_gb_rom[i]=NULL;
+			}
+			for(i=0;i<2;++i){
+				if(i>=g_am3u_rom->changee_used)continue;
+				if(log_cb)log_cb(RETRO_LOG_INFO,
+                      "ROM slot %d: %s\n",i+1,g_am3u_rom->changee_tbl[i].path);
+			}			
+		}
+	}
+
    for (i = 0; i < 2; i++)
    {
       g_gb[i]   = NULL;
@@ -270,9 +471,25 @@ bool retro_load_game(const struct retro_game_info *info)
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
-   render[0] = new dmy_renderer(0);
-   g_gb[0]   = new gb(render[0], true, true);
+   for (i = 0; i < 2; i++)
+      _serialize_size[i] = 0;
 
+	if(g_am3u_rom){
+	      mode      = MODE_DUAL_GAME;
+	      environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_dual);
+
+		romidx=g_am3u_rom->slot_tbl[0];
+		if(romidx>=0)
+		{
+			if(!gb_startup(0, (byte*)qloaded_bgn(g_gb_rom[romidx]), g_gb_rom[romidx]->readsize, libretro_supports_persistent_buffer))return false;
+		}
+		romidx=g_am3u_rom->slot_tbl[1];
+		if(romidx>=0)
+		{
+			if(!gb_startup(1, (byte*)qloaded_bgn(g_gb_rom[romidx]), g_gb_rom[romidx]->readsize, libretro_supports_persistent_buffer))return false;
+		}
+	}
+	else{
    if (environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &info_ext) &&
        info_ext->persistent_data)
    {
@@ -286,37 +503,22 @@ bool retro_load_game(const struct retro_game_info *info)
       rom_size                            = info->size;
    }
 
-   if (!g_gb[0]->load_rom(rom_data, rom_size, NULL, 0,
-            libretro_supports_persistent_buffer))
-      return false;
-
-   for (i = 0; i < 2; i++)
-      _serialize_size[i] = 0;
-
+		if(!gb_startup(0, rom_data, rom_size, libretro_supports_persistent_buffer))return false;
    if (gblink_enable)
    {
       mode      = MODE_SINGLE_GAME_DUAL;
       environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_dual);
 
-      render[1] = new dmy_renderer(1);
-      g_gb[1]   = new gb(render[1], true, true);
-
-      if (!g_gb[1]->load_rom(rom_data, rom_size, NULL, 0,
-               libretro_supports_persistent_buffer))
-         return false;
-
-      // for link cables and IR:
-      g_gb[0]->set_target(g_gb[1]);
-      g_gb[1]->set_target(g_gb[0]);
+			if(!gb_startup(1, rom_data, rom_size, libretro_supports_persistent_buffer))return false;
    }
    else
       mode = MODE_SINGLE_GAME;
+	}
 
    check_variables();
 
    return true;
 }
-
 
 bool retro_load_game_special(unsigned type, const struct retro_game_info *info, size_t num_info)
 {
@@ -365,26 +567,14 @@ bool retro_load_game_special(unsigned type, const struct retro_game_info *info, 
 
    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
-   render[0] = new dmy_renderer(0);
-   g_gb[0]   = new gb(render[0], true, true);
-   if (!g_gb[0]->load_rom((byte*)info[0].data, info[0].size, NULL, 0, false))
-      return false;
-
    for (i = 0; i < 2; i++)
       _serialize_size[i] = 0;
 
+	if(!gb_startup(0, (byte*)info[0].data, info[0].size, false))return false;
+
    if (gblink_enable)
    {
-      render[1] = new dmy_renderer(1);
-      g_gb[1] = new gb(render[1], true, true);
-
-      if (!g_gb[1]->load_rom((byte*)info[1].data, info[1].size, NULL, 0,
-               false))
-         return false;
-
-      // for link cables and IR:
-      g_gb[0]->set_target(g_gb[1]);
-      g_gb[1]->set_target(g_gb[0]);
+		if(!gb_startup(1, (byte*)info[1].data, info[1].size, false))return false;
    }
 
    mode = MODE_DUAL_GAME;
@@ -397,16 +587,17 @@ void retro_unload_game(void)
    unsigned i;
    for(i = 0; i < 2; ++i)
    {
-      if (g_gb[i])
-      {
-         delete g_gb[i];
-         g_gb[i] = NULL;
-         delete render[i];
-         render[i] = NULL;
-      }
+	gb_shutdown(i,false);
    }
    free(my_av_info);
    libretro_supports_persistent_buffer = false;
+
+	for(i=0;i<MAX_ROM_VALIANT;++i){
+		if(g_gb_rom[i])qunload(&g_gb_rom[i]);
+	}
+
+	g_am3u_rom=NULL;
+	if(g_am3u)am3u_free(&g_am3u);
 }
 
 void retro_reset(void)
@@ -530,15 +721,13 @@ size_t retro_get_memory_size(unsigned id)
 // answer: yes, it's most likely needed to sync up netplay and for bsv records.
 size_t retro_serialize_size(void)
 {
-   if (!(_serialize_size[0] + _serialize_size[1]))
-   {
       unsigned i;
 
       for(i = 0; i < 2; ++i)
       {
+		_serialize_size[i] = g_am3u_rom?1:0;
          if (g_gb[i])
-            _serialize_size[i] = g_gb[i]->get_state_size();
-      }
+            _serialize_size[i] += g_gb[i]->get_state_size();
    }
    return _serialize_size[0] + _serialize_size[1];
 }
@@ -552,6 +741,11 @@ bool retro_serialize(void *data, size_t size)
 
       for(i = 0; i < 2; ++i)
       {
+		if(g_am3u_rom){
+			*ptr=g_am3u_rom->slot_tbl[i];
+			++ptr;
+		}
+
          if (g_gb[i])
          {
             g_gb[i]->save_state_mem(ptr);
@@ -573,6 +767,19 @@ bool retro_unserialize(const void *data, size_t size)
 
       for(i = 0; i < 2; ++i)
       {
+		if(g_am3u_rom){
+			gb_shutdown(i,true);
+			g_am3u_rom->slot_tbl[i]=*ptr;
+			am3u_device_set_media(g_am3u_rom,i,*ptr);
+			if(*ptr>=0){
+				if(!gb_startup(i, (byte*)qloaded_bgn(g_gb_rom[*ptr]), g_gb_rom[*ptr]->readsize, libretro_supports_persistent_buffer)){
+				   if (log_cb)
+				      log_cb(RETRO_LOG_ERROR, "unserialize: cannot start rom idx=%d\n", *ptr);
+				}
+			}
+			++ptr;
+		}
+
          if (g_gb[i])
          {
             g_gb[i]->restore_state_mem(ptr);
@@ -669,7 +876,7 @@ void retro_set_environment(retro_environment_t cb)
 {
    static const struct retro_system_content_info_override content_overrides[] = {
       {
-         "gb|dmg|gbc|cgb|sgb", /* extensions */
+         "gb|dmg|gbc|cgb|sgb|m3u", /* extensions */
          false,    /* need_fullpath */
          true      /* persistent_data */
       },
