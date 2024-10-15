@@ -42,4 +42,5 @@ private:
 	int cur_time;
 	int which_gb;
 	bool rgb565;
+	int32_t prev_joypad_bits;
 };

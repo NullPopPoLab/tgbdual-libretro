@@ -39,6 +39,7 @@ extern retro_environment_t environ_cb;
 extern bool gblink_enable;
 
 extern int audio_2p_mode;
+extern bool audio_2p_mode_controlled;
 
 #define MSG_FRAMES 60
 #define SAMPLES_PER_FRAME (44100/60)
@@ -155,6 +156,14 @@ int dmy_renderer::check_pad()
       for (i = 0; i < RETRO_DEVICE_ID_JOYPAD_BUTTON_MAX; i++)
          joypad_bits |= input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
    }
+
+	// toggle audio 
+	if(audio_2p_mode<2 && (joypad_bits&!prev_joypad_bits) & (1 << RETRO_DEVICE_ID_JOYPAD_MENU)){
+		audio_2p_mode=1-audio_2p_mode;
+		audio_2p_mode_controlled=true;
+	}
+
+	prev_joypad_bits=joypad_bits;
 
    // update pad state: a,b,select,start,down,up,left,right
    return
