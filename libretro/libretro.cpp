@@ -11,6 +11,8 @@
 #include "../mk5s/quick_loader.h"
 #include "../mk5s/quick_path.h"
 
+#define CUSTOM_VERSION "+NC38"
+
 #define RETRO_MEMORY_GAMEBOY_1_SRAM ((1 << 8) | RETRO_MEMORY_SAVE_RAM)
 #define RETRO_MEMORY_GAMEBOY_1_RTC ((2 << 8) | RETRO_MEMORY_RTC)
 #define RETRO_MEMORY_GAMEBOY_2_SRAM ((3 << 8) | RETRO_MEMORY_SAVE_RAM)
@@ -100,7 +102,7 @@ void retro_get_system_info(struct retro_system_info *info)
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif
-   info->library_version  = "v0.8.3" GIT_VERSION;
+   info->library_version  = "v0.8.3" GIT_VERSION CUSTOM_VERSION;
    info->need_fullpath    = false;
    info->valid_extensions = "gb|dmg|gbc|cgb|sgb|m3u";
 }
