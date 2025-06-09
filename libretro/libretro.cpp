@@ -498,29 +498,29 @@ bool retro_load_game(const struct retro_game_info *info)
 		}
 	}
 	else{
-   if (environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &info_ext) &&
-       info_ext->persistent_data)
-   {
-      rom_data                            = (byte*)info_ext->data;
-      rom_size                            = info_ext->size;
-      libretro_supports_persistent_buffer = true;
-   }
-   else
-   {
-      rom_data                            = (byte*)info->data;
-      rom_size                            = info->size;
-   }
+	   if (environ_cb(RETRO_ENVIRONMENT_GET_GAME_INFO_EXT, &info_ext) &&
+	       info_ext->persistent_data)
+	   {
+	      rom_data                            = (byte*)info_ext->data;
+	      rom_size                            = info_ext->size;
+	      libretro_supports_persistent_buffer = true;
+	   }
+	   else
+	   {
+	      rom_data                            = (byte*)info->data;
+	      rom_size                            = info->size;
+	   }
 
 		if(!gb_startup(0, rom_data, rom_size, libretro_supports_persistent_buffer))return false;
-   if (gblink_enable)
-   {
-      mode      = MODE_SINGLE_GAME_DUAL;
-      environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_dual);
+	   if (gblink_enable)
+	   {
+	      mode      = MODE_SINGLE_GAME_DUAL;
+	      environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_dual);
 
 			if(!gb_startup(1, rom_data, rom_size, libretro_supports_persistent_buffer))return false;
-   }
-   else
-      mode = MODE_SINGLE_GAME;
+	   }
+	   else
+	      mode = MODE_SINGLE_GAME;
 	}
 
    check_variables();
@@ -734,7 +734,7 @@ size_t retro_serialize_size(void)
 		_serialize_size[i] = g_am3u_rom?1:0;
          if (g_gb[i])
             _serialize_size[i] += g_gb[i]->get_state_size();
-   }
+      }
    return _serialize_size[0] + _serialize_size[1];
 }
 
