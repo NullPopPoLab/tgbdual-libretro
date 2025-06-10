@@ -434,18 +434,8 @@ static bool am3u_error(void* user,int code,int lineloc,const QTextRef* line){
 	return true;
 }
 
-bool retro_load_game(const struct retro_game_info *info)
+void set_input_desc()
 {
-   size_t rom_size;
-   byte *rom_data;
-   const struct retro_game_info_ext *info_ext = NULL;
-	int romidx;
-
-   environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_single);
-   check_variables();
-
-   unsigned i;
-
    struct retro_input_descriptor desc[] = {
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
@@ -474,8 +464,25 @@ bool retro_load_game(const struct retro_game_info *info)
       { 0 },
    };
 
+   environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
+}
+
+bool retro_load_game(const struct retro_game_info *info)
+{
+   size_t rom_size;
+   byte *rom_data;
+   const struct retro_game_info_ext *info_ext = NULL;
+	int romidx;
+
+   environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_single);
+   check_variables();
+
+   unsigned i;
+
    if (!info)
       return false;
+
+	set_input_desc();
 
 	QTextRef ext;
 	if(!qpath_extension_c(&ext,info->path,false));
@@ -512,8 +519,6 @@ bool retro_load_game(const struct retro_game_info *info)
       g_gb[i]   = NULL;
       render[i] = NULL;
    }
-
-   environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
    for (i = 0; i < 2; i++)
       _serialize_size[i] = 0;
@@ -572,29 +577,7 @@ bool retro_load_game_special(unsigned type, const struct retro_game_info *info, 
    environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, (void *)vars_dual);
    unsigned i;
 
-   struct retro_input_descriptor desc[] = {
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MENU,  "Toggle Audio" },
-
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MENU,  "Toggle Audio" },
-
-      { 0 },
-   };
+	set_input_desc();
 
    if (!info)
       return false;
@@ -606,8 +589,6 @@ bool retro_load_game_special(unsigned type, const struct retro_game_info *info, 
    }
 
    check_variables();
-
-   environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 
    for (i = 0; i < 2; i++)
       _serialize_size[i] = 0;
