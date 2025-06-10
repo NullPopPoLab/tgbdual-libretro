@@ -18,7 +18,7 @@
 
 #define RETRO_GAME_TYPE_GAMEBOY_LINK_2P 0x101
 
-#define MAX_ROM_VALIANT 8
+#define MAX_ROM_VARIANT 8
 
 static const struct retro_variable vars_single[] = {
     { "tgbdual_gblink_enable", "Link cable emulation (reload); disabled|enabled" },
@@ -64,7 +64,7 @@ static enum mode mode = MODE_SINGLE_GAME;
 
 gb *g_gb[2];
 dmy_renderer *render[2];
-QLoaded* g_gb_rom[MAX_ROM_VALIANT]={NULL};
+QLoaded* g_gb_rom[MAX_ROM_VARIANT]={NULL};
 
 retro_log_printf_t log_cb;
 retro_video_refresh_t video_cb;
@@ -445,12 +445,12 @@ bool retro_load_game(const struct retro_game_info *info)
 			g_am3u=am3u_new();
 			am3u_set_default_device(g_am3u,'R');
 			g_am3u_rom=am3u_get_device(g_am3u,'R');
-			am3u_device_set_changer(g_am3u_rom,MAX_ROM_VALIANT);
+			am3u_device_set_changer(g_am3u_rom,MAX_ROM_VARIANT);
 			am3u_device_set_slots(g_am3u_rom,2);
 			am3u_setup_q(g_am3u,&imgref,&m3udir,am3u_error,NULL);
 			qunload(&img);
 
-			for(i=0;i<MAX_ROM_VALIANT;++i){
+			for(i=0;i<MAX_ROM_VARIANT;++i){
 				if(g_am3u_rom->changee_tbl[i].path)
 					g_gb_rom[i]=qload(g_am3u_rom->changee_tbl[i].path,false);
 				else g_gb_rom[i]=NULL;
@@ -592,7 +592,7 @@ void retro_unload_game(void)
    free(my_av_info);
    libretro_supports_persistent_buffer = false;
 
-	for(i=0;i<MAX_ROM_VALIANT;++i){
+	for(i=0;i<MAX_ROM_VARIANT;++i){
 		if(g_gb_rom[i])qunload(&g_gb_rom[i]);
 	}
 
