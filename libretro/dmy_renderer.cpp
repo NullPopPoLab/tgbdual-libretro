@@ -39,7 +39,7 @@ extern retro_environment_t environ_cb;
 extern bool gblink_enable;
 
 extern int audio_2p_mode;
-extern bool audio_2p_mode_controlled;
+extern bool audio_2p_mode_switched;
 extern bool get_drive_eject_state(unsigned drv);
 
 #define MSG_FRAMES 60
@@ -107,42 +107,45 @@ word dmy_renderer::unmap_color(word gb_col)
 }
 
 void dmy_renderer::refresh() {
-   static int16_t stream[SAMPLES_PER_FRAME*2];
 
-   if (1/*g_gb[1] && gblink_enable*/)
-   {
-      // if dual gb mode
-      if (audio_2p_mode == 2)
-      {
-         // mix down to one per channel (dual mono)
-         int16_t tmp_stream[SAMPLES_PER_FRAME*2];
-         this->snd_render->render(tmp_stream, SAMPLES_PER_FRAME);
-         for(int i = 0; i < SAMPLES_PER_FRAME; ++i)
-         {
-            int l = tmp_stream[(i*2)+0], r = tmp_stream[(i*2)+1];
-            stream[(i*2)+which_gb] = int16_t( (l+r) / 2 );
-         }
-      }
-      else if (audio_2p_mode == which_gb)
-      {
-         // only play gb 0 or 1
-         this->snd_render->render(stream, SAMPLES_PER_FRAME);
-      }
+	// sound buffer shared for all GBs 
+	static int16_t stream[SAMPLES_PER_FRAME*2];
+	static int16_t tmp_stream[SAMPLES_PER_FRAME*2];
 
-      if (which_gb == get_drive_eject_state(1)?0:1)
-      {
-         // only do audio callback after both gb's are rendered.
-         audio_batch_cb(stream, SAMPLES_PER_FRAME);
+	// if dual gb mode
+	if (audio_2p_mode == 3)
+	{
+		// (bug)
+		// sound broken when both render() called 
+		// maybe conflicts in APU procedure. 
 
-         audio_2p_mode &= 3;
-         memset(stream, 0, sizeof(stream));
-      }
-   }
-   else
-   {
-      this->snd_render->render(stream, SAMPLES_PER_FRAME);
-      audio_batch_cb(stream, SAMPLES_PER_FRAME);
-   }
+		// mix down to one per channel (dual mono)
+		this->snd_render->render(tmp_stream, SAMPLES_PER_FRAME);
+		for(int i = 0; i < SAMPLES_PER_FRAME; ++i)
+		{
+			// mono mix 
+			int l = tmp_stream[(i*2)+0], r = tmp_stream[(i*2)+1];
+			stream[(i*2)+which_gb] = int16_t( (l+r) / 2 );
+		}
+	}
+	else if (audio_2p_mode == which_gb+1)
+	{
+		// only play gb 0 or 1
+		this->snd_render->render(stream, SAMPLES_PER_FRAME);
+	}
+
+	// should flush the sound buffer after all GBs updated. 
+	// have a caution, this method not called on ejected GBs. 
+	// and must flush after GB[0] updated when GB[1] is ejected. 
+	if (which_gb == 1 || get_drive_eject_state(1))
+	{
+		// only do audio callback after both gb's are rendered.
+		audio_batch_cb(stream, SAMPLES_PER_FRAME);
+
+//         audio_2p_mode &= 3;
+		memset(stream, 0, sizeof(stream));
+	}
+
    fixed_time = time(NULL);
 }
 
@@ -160,9 +163,15 @@ int dmy_renderer::check_pad()
    }
 
 	// toggle audio 
-	if(audio_2p_mode<2 && (joypad_bits&!prev_joypad_bits) & (1 << RETRO_DEVICE_ID_JOYPAD_MENU)){
-		audio_2p_mode=1-audio_2p_mode;
-		audio_2p_mode_controlled=true;
+	if(!which_gb){
+		if((joypad_bits&~prev_joypad_bits) & (1 << RETRO_DEVICE_ID_JOYPAD_L3)){
+			audio_2p_mode^=1;
+			audio_2p_mode_switched=true;
+		}
+		if((joypad_bits&~prev_joypad_bits) & (1 << RETRO_DEVICE_ID_JOYPAD_R3)){
+			audio_2p_mode^=2;
+			audio_2p_mode_switched=true;
+		}
 	}
 
 	prev_joypad_bits=joypad_bits;
