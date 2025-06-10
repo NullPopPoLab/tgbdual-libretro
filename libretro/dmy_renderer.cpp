@@ -37,6 +37,7 @@ extern retro_input_state_t input_state_cb;
 extern retro_environment_t environ_cb;
 
 extern bool gblink_enable;
+extern bool dual_control;
 
 extern int audio_2p_mode;
 extern bool audio_2p_mode_switched;
@@ -158,15 +159,49 @@ void dmy_renderer::refresh() {
 int dmy_renderer::check_pad()
 {
    int32_t joypad_bits;
-   if (libretro_supports_bitmasks)
-      joypad_bits = input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-   else
-   {
-      unsigned i;
-      joypad_bits = 0;
-      for (i = 0; i < RETRO_DEVICE_ID_JOYPAD_BUTTON_MAX; i++)
-         joypad_bits |= input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
-   }
+   static int32_t joypad_bits_dual;
+
+	if(which_gb && dual_control){
+		joypad_bits=
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_X))?1:0)<<RETRO_DEVICE_ID_JOYPAD_UP |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_B))?1:0)<<RETRO_DEVICE_ID_JOYPAD_DOWN |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_Y))?1:0)<<RETRO_DEVICE_ID_JOYPAD_LEFT |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_A))?1:0)<<RETRO_DEVICE_ID_JOYPAD_RIGHT |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R))?1:0)<<RETRO_DEVICE_ID_JOYPAD_A |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R2))?1:0)<<RETRO_DEVICE_ID_JOYPAD_B |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R4))?1:0)<<RETRO_DEVICE_ID_JOYPAD_X |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R5))?1:0)<<RETRO_DEVICE_ID_JOYPAD_Y |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_G2))?1:0)<<RETRO_DEVICE_ID_JOYPAD_START |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_START))?1:0)<<RETRO_DEVICE_ID_JOYPAD_SELECT;
+	}
+	else{
+		if (libretro_supports_bitmasks)
+		  joypad_bits = input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+		else
+		{
+		  unsigned i;
+		  joypad_bits = 0;
+		  for (i = 0; i < RETRO_DEVICE_ID_JOYPAD_BUTTON_MAX; i++)
+		     joypad_bits |= input_state_cb(which_gb, RETRO_DEVICE_JOYPAD, 0, i) ? (1 << i) : 0;
+		}
+
+		if(dual_control){
+			joypad_bits_dual=joypad_bits;
+			joypad_bits=
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_UP))?1:0)<<RETRO_DEVICE_ID_JOYPAD_UP |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_DOWN))?1:0)<<RETRO_DEVICE_ID_JOYPAD_DOWN |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_LEFT))?1:0)<<RETRO_DEVICE_ID_JOYPAD_LEFT |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_RIGHT))?1:0)<<RETRO_DEVICE_ID_JOYPAD_RIGHT |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L))?1:0)<<RETRO_DEVICE_ID_JOYPAD_A |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L2))?1:0)<<RETRO_DEVICE_ID_JOYPAD_B |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L4))?1:0)<<RETRO_DEVICE_ID_JOYPAD_X |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L5))?1:0)<<RETRO_DEVICE_ID_JOYPAD_Y |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_G1))?1:0)<<RETRO_DEVICE_ID_JOYPAD_START |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_SELECT))?1:0)<<RETRO_DEVICE_ID_JOYPAD_SELECT |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L3))?1:0)<<RETRO_DEVICE_ID_JOYPAD_L3 |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R3))?1:0)<<RETRO_DEVICE_ID_JOYPAD_R3;
+		}
+	}
 
 	// turbo 
 	if(joypad_bits & (1 << RETRO_DEVICE_ID_JOYPAD_X)){

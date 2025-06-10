@@ -22,6 +22,9 @@
 
 #define MAX_ROM_VARIANT 8
 
+#define RETRO_DEVICE_JOYPAD_NORMAL   RETRO_DEVICE_SUBCLASS( RETRO_DEVICE_JOYPAD, 0 )
+#define RETRO_DEVICE_JOYPAD_DUAL     RETRO_DEVICE_SUBCLASS( RETRO_DEVICE_JOYPAD, 1 )
+
 static const struct retro_variable vars_single[] = {
     { "tgbdual_gblink_enable", "Link cable emulation (reload); disabled|enabled" },
     { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 3|4|5|6|7|8|0|1|2" },
@@ -89,6 +92,7 @@ static struct retro_disk_control_ext2_callback dskcb;
 static unsigned diskidx=0;
 
 bool gblink_enable                       = false;
+bool dual_control                        = false;
 int audio_2p_mode = 1; // player 1 side 
 bool audio_2p_mode_switched=false; // indicate controlled in renderer 
 // used to make certain core options only take effect once on core startup
@@ -460,6 +464,40 @@ void set_input_desc()
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+
+      { 0 },
+   };
+
+   environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
+}
+
+void set_input_desc_dual()
+{
+   struct retro_input_descriptor desc[] = {
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "GB#1 D-Pad Left" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "GB#1 D-Pad Up" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "GB#1 D-Pad Down" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "GB#1 D-Pad Right" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,     "GB#1 A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L2,    "GB#1 B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L4,    "GB#1 Turbo A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L5,    "GB#1 Turbo B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,"GB#1 Select" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G1,    "GB#1 Start" },
+
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "GB#2 D-Pad Left" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "GB#2 D-Pad Up" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "GB#2 D-Pad Down" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "GB#2 D-Pad Right" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,     "GB#2 A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R2,    "GB#2 B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R4,    "GB#2 Turbo A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R5,    "GB#2 Turbo B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "GB#2 Select" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G2,    "GB#2 Start" },
+
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,    "GB#1 Toggle Audio" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,    "GB#2 Toggle Audio" },
 
       { 0 },
    };
@@ -886,7 +924,20 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 unsigned retro_get_region(void) { return RETRO_REGION_NTSC; }
 
-void retro_set_controller_port_device(unsigned port, unsigned device) { }
+void retro_set_controller_port_device(unsigned port, unsigned device) {
+
+	// Player 1 only 
+	if(port)return;
+
+	if(device==RETRO_DEVICE_JOYPAD_DUAL){
+		dual_control=true;
+		set_input_desc_dual();
+	}
+	else{
+		dual_control=false;
+		set_input_desc();
+	}
+}
 
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { }
@@ -910,6 +961,25 @@ void retro_set_environment(retro_environment_t cb)
    /* Request a persistent content data buffer */
    cb(RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE,
          (void*)content_overrides);
+
+	// controller port settiings 
+   static const struct retro_controller_description port1[] = {
+      { "RetroPad",              RETRO_DEVICE_JOYPAD },
+      { "RetroPad Dual",         RETRO_DEVICE_JOYPAD_DUAL },
+      { 0 },
+   };
+   static const struct retro_controller_description port2[] = {
+      { "RetroPad",              RETRO_DEVICE_JOYPAD },
+      { 0 },
+   };
+
+   static const struct retro_controller_info ports[] = {
+      { port1, sizeof(port1)/sizeof(struct retro_controller_description) },
+      { port2, sizeof(port2)/sizeof(struct retro_controller_description) },
+      { NULL, 0 },
+   };
+
+   cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void*)ports);
 }
 
 // end boilerplate
