@@ -24,6 +24,8 @@
 
 static const struct retro_variable vars_single[] = {
     { "tgbdual_gblink_enable", "Link cable emulation (reload); disabled|enabled" },
+    { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 3|4|5|6|7|8|0|1|2" },
+    { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 3|4|5|6|7|8|0|1|2" },
     { NULL, NULL },
 };
 
