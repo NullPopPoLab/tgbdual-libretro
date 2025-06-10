@@ -33,6 +33,8 @@ static const struct retro_variable vars_dual[] = {
     { "tgbdual_switch_screens", "Switch player screens; normal|switched" },
     { "tgbdual_single_screen_mp", "Show player screens; both players|player 1 only|player 2 only" },
     { "tgbdual_audio_output", "Audio output; Game Boy #1|Game Boy #2|Both Mix|Muted" },
+    { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 3|4|5|6|7|8|0|1|2" },
+    { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 3|4|5|6|7|8|0|1|2" },
     { NULL, NULL },
 };
 
@@ -92,6 +94,9 @@ bool already_checked_options             = false;
 bool libretro_supports_persistent_buffer = false;
 bool libretro_supports_bitmasks          = false;
 struct retro_system_av_info *my_av_info  = (retro_system_av_info*)malloc(sizeof(*my_av_info));
+
+unsigned turbo_speed_a=0x3000;
+unsigned turbo_speed_b=0x3000;
 
 static AdvancedM3U *g_am3u=NULL;
 static AdvancedM3UDevice *g_am3u_rom=NULL;
@@ -395,6 +400,21 @@ static void check_variables(void)
 		 audio_2p_mode = 3;
 		else audio_2p_mode = 0;
 	}
+
+	// turbo speed 
+	var.key = "tgbdual_turbo_speed_a";
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		turbo_speed_a=atoi(var.value)*0x1000;
+	}
+	else turbo_speed_a=0x3000;
+
+	var.key = "tgbdual_turbo_speed_b";
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		turbo_speed_b=atoi(var.value)*0x1000;
+	}
+	else turbo_speed_b=0x3000;
 }
 
 static bool am3u_error(void* user,int code,int lineloc,const QTextRef* line){
@@ -429,8 +449,10 @@ bool retro_load_game(const struct retro_game_info *info)
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,    "GB#1 Toggle Audio" },
@@ -440,8 +462,10 @@ bool retro_load_game(const struct retro_game_info *info)
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_DOWN,  "D-Pad Down" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
 

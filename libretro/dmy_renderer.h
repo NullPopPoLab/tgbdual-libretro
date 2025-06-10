@@ -43,4 +43,7 @@ private:
 	int which_gb;
 	bool rgb565;
 	int32_t prev_joypad_bits;
+
+	unsigned turbo_a;
+	unsigned turbo_b;
 };
