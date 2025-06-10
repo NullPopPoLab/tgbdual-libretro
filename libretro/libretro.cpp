@@ -32,7 +32,7 @@ static const struct retro_variable vars_dual[] = {
     { "tgbdual_screen_placement", "Screen layout; left-right|top-down" },
     { "tgbdual_switch_screens", "Switch player screens; normal|switched" },
     { "tgbdual_single_screen_mp", "Show player screens; both players|player 1 only|player 2 only" },
-    { "tgbdual_audio_output", "Audio output; Game Boy #1|Game Boy #2" },
+    { "tgbdual_audio_output", "Audio output; Game Boy #1|Game Boy #2|Both Mix|Muted" },
     { NULL, NULL },
 };
 
@@ -85,8 +85,8 @@ static struct retro_disk_control_ext2_callback dskcb;
 static unsigned diskidx=0;
 
 bool gblink_enable                       = false;
-int audio_2p_mode                        = 0;
-bool audio_2p_mode_controlled=false;
+int audio_2p_mode = 1; // player 1 side 
+bool audio_2p_mode_switched=false; // indicate controlled in renderer 
 // used to make certain core options only take effect once on core startup
 bool already_checked_options             = false;
 bool libretro_supports_persistent_buffer = false;
@@ -373,20 +373,28 @@ static void check_variables(void)
    // check whether player 1 and 2's screen placements are swapped
    var.key = "tgbdual_audio_output";
    var.value = NULL;
-	if(audio_2p_mode_controlled){
-		audio_2p_mode_controlled=false;
-		var.value=audio_2p_mode?"Game Boy #2":"Game Boy #1";
+	if(audio_2p_mode_switched){
+		// apply from control at this frame 
+		audio_2p_mode_switched=false;
+		switch(audio_2p_mode&3){
+			case 0: var.value="Muted"; break;
+			case 1: var.value="Game Boy #1"; break;
+			case 2: var.value="Game Boy #2"; break;
+			case 3: var.value="Both Mix"; break;
+		}
 		environ_cb(RETRO_ENVIRONMENT_SET_VARIABLE, &var);
 	}
-   else if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-   {
-      if (!strcmp(var.value, "Game Boy #1"))
-         audio_2p_mode = 0;
-      else if (!strcmp(var.value, "Game Boy #2"))
-         audio_2p_mode = 1;
-   }
-   else
-      _screen_switched = false;
+	else if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		// apply from config 
+		if (!strcmp(var.value, "Game Boy #1"))
+		 audio_2p_mode = 1;
+		else if (!strcmp(var.value, "Game Boy #2"))
+		 audio_2p_mode = 2;
+		else if (!strcmp(var.value, "Both Mix"))
+		 audio_2p_mode = 3;
+		else audio_2p_mode = 0;
+	}
 }
 
 static bool am3u_error(void* user,int code,int lineloc,const QTextRef* line){
@@ -425,7 +433,8 @@ bool retro_load_game(const struct retro_game_info *info)
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MENU,  "Toggle Audio" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,    "GB#1 Toggle Audio" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,    "GB#2 Toggle Audio" },
 
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_UP,    "D-Pad Up" },
@@ -435,7 +444,6 @@ bool retro_load_game(const struct retro_game_info *info)
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MENU,  "Toggle Audio" },
 
       { 0 },
    };
