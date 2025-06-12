@@ -167,8 +167,8 @@ int dmy_renderer::check_pad()
 			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_B))?1:0)<<RETRO_DEVICE_ID_JOYPAD_DOWN |
 			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_Y))?1:0)<<RETRO_DEVICE_ID_JOYPAD_LEFT |
 			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_A))?1:0)<<RETRO_DEVICE_ID_JOYPAD_RIGHT |
-			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R))?1:0)<<RETRO_DEVICE_ID_JOYPAD_A |
-			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R2))?1:0)<<RETRO_DEVICE_ID_JOYPAD_B |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R0))?1:0)<<RETRO_DEVICE_ID_JOYPAD_A |
+			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R))?1:0)<<RETRO_DEVICE_ID_JOYPAD_B |
 			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R4))?1:0)<<RETRO_DEVICE_ID_JOYPAD_X |
 			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_R5))?1:0)<<RETRO_DEVICE_ID_JOYPAD_Y |
 			((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_G2))?1:0)<<RETRO_DEVICE_ID_JOYPAD_START |
@@ -192,8 +192,8 @@ int dmy_renderer::check_pad()
 				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_DOWN))?1:0)<<RETRO_DEVICE_ID_JOYPAD_DOWN |
 				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_LEFT))?1:0)<<RETRO_DEVICE_ID_JOYPAD_LEFT |
 				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_RIGHT))?1:0)<<RETRO_DEVICE_ID_JOYPAD_RIGHT |
-				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L))?1:0)<<RETRO_DEVICE_ID_JOYPAD_A |
-				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L2))?1:0)<<RETRO_DEVICE_ID_JOYPAD_B |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L0))?1:0)<<RETRO_DEVICE_ID_JOYPAD_A |
+				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L))?1:0)<<RETRO_DEVICE_ID_JOYPAD_B |
 				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L4))?1:0)<<RETRO_DEVICE_ID_JOYPAD_X |
 				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_L5))?1:0)<<RETRO_DEVICE_ID_JOYPAD_Y |
 				((joypad_bits_dual&(1<<RETRO_DEVICE_ID_JOYPAD_G1))?1:0)<<RETRO_DEVICE_ID_JOYPAD_START |
