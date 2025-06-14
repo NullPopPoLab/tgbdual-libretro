@@ -43,9 +43,6 @@ extern int audio_2p_mode;
 extern bool audio_2p_mode_switched;
 extern bool get_drive_eject_state(unsigned drv);
 
-extern unsigned turbo_speed_a;
-extern unsigned turbo_speed_b;
-
 #define MSG_FRAMES 60
 #define SAMPLES_PER_FRAME (44100/60)
 
@@ -61,8 +58,7 @@ dmy_renderer::dmy_renderer(int which)
    retro_pixel_format pixfmt = RETRO_PIXEL_FORMAT_RGB565;
    rgb565 = environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixfmt);
 
-	turbo_a=0x7fff;
-	turbo_b=0x7fff;
+	memset(&turboWork,0,sizeof(turboWork));
 
 #ifndef FRONTEND_SUPPORTS_RGB565
    if (rgb565 && log_cb)
@@ -204,23 +200,20 @@ int dmy_renderer::check_pad()
 	}
 
 	// turbo 
-	if(joypad_bits & (1 << RETRO_DEVICE_ID_JOYPAD_X)){
-		if(!turbo_speed_a)joypad_bits |= 1 << RETRO_DEVICE_ID_JOYPAD_A;
-		else{
-			turbo_a+=turbo_speed_a;
-			if(turbo_a&0x8000)joypad_bits |= 1 << RETRO_DEVICE_ID_JOYPAD_A;
+	TurboConfig *tc;
+	TurboWork* tw;
+	for(tw=&turboWork[0],tc=&turboConfig[0];tw<&turboWork[TURBO_BUTTONS];++tw,++tc){
+		if(joypad_bits & (1 << tc->srcbtn)){
+			if(!tc->speed)joypad_bits|=1<<tc->dstbtn;
+			else{
+				tw->counter-=tc->speed;
+				if((tw->counter&0xffff)>=turbo_ratio)joypad_bits|=1<<tc->dstbtn;
+			}
 		}
-	}
-	else turbo_a=0x7fff;
-
-	if(joypad_bits & (1 << RETRO_DEVICE_ID_JOYPAD_Y)){
-		if(!turbo_speed_b)joypad_bits |= 1 << RETRO_DEVICE_ID_JOYPAD_B;
 		else{
-			turbo_b+=turbo_speed_b;
-			if(turbo_b&0x8000)joypad_bits |= 1 << RETRO_DEVICE_ID_JOYPAD_B;
+			tw->counter=0;
 		}
-	}
-	else turbo_b=0x7fff;
+	}	
 
 	// toggle audio 
 	if(!which_gb){

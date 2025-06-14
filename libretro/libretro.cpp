@@ -27,8 +27,11 @@
 
 static const struct retro_variable vars_single[] = {
     { "tgbdual_gblink_enable", "Link cable emulation (reload); disabled|enabled" },
-    { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 3|4|5|6|7|8|0|1|2" },
-    { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 3|4|5|6|7|8|0|1|2" },
+    { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_speed_start", "Turbo Speed for Button Start; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_speed_select", "Turbo Speed for Button Select; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_ratio", "Turbo Button Pressing Ratio; 5|6|7|8|9|10|11|12|13|14|15|1|2|3|4" },
     { NULL, NULL },
 };
 
@@ -38,8 +41,11 @@ static const struct retro_variable vars_dual[] = {
     { "tgbdual_switch_screens", "Switch player screens; normal|switched" },
     { "tgbdual_single_screen_mp", "Show player screens; both players|player 1 only|player 2 only" },
     { "tgbdual_audio_output", "Audio output; Game Boy #1|Game Boy #2|Both Mix|Muted" },
-    { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 3|4|5|6|7|8|0|1|2" },
-    { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 3|4|5|6|7|8|0|1|2" },
+    { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_speed_start", "Turbo Speed for Button Start; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_speed_select", "Turbo Speed for Button Select; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
+    { "tgbdual_turbo_ratio", "Turbo Button Pressing Ratio; 5|6|7|8|9|10|11|12|13|14|15|1|2|3|4" },
     { NULL, NULL },
 };
 
@@ -101,8 +107,15 @@ bool libretro_supports_persistent_buffer = false;
 bool libretro_supports_bitmasks          = false;
 struct retro_system_av_info *my_av_info  = (retro_system_av_info*)malloc(sizeof(*my_av_info));
 
-unsigned turbo_speed_a=0x3000;
-unsigned turbo_speed_b=0x3000;
+TurboConfig turboConfig[TURBO_BUTTONS]={
+	{0x2800,RETRO_DEVICE_ID_JOYPAD_A,RETRO_DEVICE_ID_JOYPAD_X,"tgbdual_turbo_speed_a"},
+	{0x2800,RETRO_DEVICE_ID_JOYPAD_B,RETRO_DEVICE_ID_JOYPAD_Y,"tgbdual_turbo_speed_b"},
+	{0x2800,RETRO_DEVICE_ID_JOYPAD_L,RETRO_DEVICE_ID_JOYPAD_L2,"tgbdual_turbo_speed_l"},
+	{0x2800,RETRO_DEVICE_ID_JOYPAD_R,RETRO_DEVICE_ID_JOYPAD_R2,"tgbdual_turbo_speed_r"},
+	{0x2800,RETRO_DEVICE_ID_JOYPAD_START,RETRO_DEVICE_ID_JOYPAD_G2,"tgbdual_turbo_speed_start"},
+	{0x2800,RETRO_DEVICE_ID_JOYPAD_SELECT,RETRO_DEVICE_ID_JOYPAD_G1,"tgbdual_turbo_speed_select"},
+};
+unsigned turbo_ratio=0x8000;
 
 static AdvancedM3U *g_am3u=NULL;
 static AdvancedM3UDevice *g_am3u_rom=NULL;
@@ -408,19 +421,21 @@ static void check_variables(void)
 	}
 
 	// turbo speed 
-	var.key = "tgbdual_turbo_speed_a";
-	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	{
-		turbo_speed_a=atoi(var.value)*0x1000;
+	for(TurboConfig* tc=&turboConfig[0];tc<&turboConfig[TURBO_BUTTONS];++tc){
+		var.key = tc->config;
+		if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+		{
+			tc->speed=atoi(var.value)*0x800;
+		}
+		else tc->speed=0x2800;
 	}
-	else turbo_speed_a=0x3000;
 
-	var.key = "tgbdual_turbo_speed_b";
+	var.key = "tgbdual_turbo_ratio";
 	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
 	{
-		turbo_speed_b=atoi(var.value)*0x1000;
+		turbo_ratio=0x10000-(atoi(var.value)*0x1000)&0xffff;
 	}
-	else turbo_speed_b=0x3000;
+	else turbo_ratio=0x8000;
 }
 
 static bool am3u_error(void* user,int code,int lineloc,const QTextRef* line){
@@ -447,10 +462,12 @@ void set_input_desc()
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G1,    "Turbo Select" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G2,    "Turbo Start" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,    "GB#1 Toggle Audio" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,    "GB#2 Toggle Audio" },
 
@@ -460,10 +477,12 @@ void set_input_desc()
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "D-Pad Right" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "A" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B,     "B" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
-      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "Start" },
       { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT, "Select" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "Turbo A" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "Turbo B" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G1,    "Turbo Select" },
+      { 1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G2,    "Turbo Start" },
 
       { 0 },
    };
@@ -480,10 +499,12 @@ void set_input_desc_dual()
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT, "GB#1 D-Pad Right" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L0,    "GB#1 A" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L,     "GB#1 B" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L4,    "GB#1 Turbo A" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L5,    "GB#1 Turbo B" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT,"GB#1 Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G1,    "GB#1 Start" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L4,    "GB#1 Turbo A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L5,    "GB#1 Turbo B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G5,    "GB#1 Turbo Select" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G3,    "GB#1 Turbo Start" },
 
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y,     "GB#2 D-Pad Left" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X,     "GB#2 D-Pad Up" },
@@ -491,10 +512,12 @@ void set_input_desc_dual()
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A,     "GB#2 D-Pad Right" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R0,    "GB#2 A" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R,     "GB#2 B" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R4,    "GB#2 Turbo A" },
-      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R5,    "GB#2 Turbo B" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START, "GB#2 Select" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G2,    "GB#2 Start" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R4,    "GB#2 Turbo A" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R5,    "GB#2 Turbo B" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G6,    "GB#2 Turbo Select" },
+      { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_G4,    "GB#2 Turbo Start" },
 
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L3,    "GB#1 Toggle Audio" },
       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_R3,    "GB#2 Toggle Audio" },
