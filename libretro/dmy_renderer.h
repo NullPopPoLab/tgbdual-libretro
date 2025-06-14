@@ -18,6 +18,28 @@
 */
 
 #include "../gb_core/renderer.h"
+#include <stdint.h>
+
+#define TURBO_A 0
+#define TURBO_B 1
+#define TURBO_L 2
+#define TURBO_R 3
+#define TURBO_START 4
+#define TURBO_SELECT 5
+#define TURBO_BUTTONS 6
+
+typedef struct TurboConfig_{
+	uint32_t speed;
+	uint32_t dstbtn;
+	uint32_t srcbtn;
+	const char* config;
+} TurboConfig;
+typedef struct TurboWork_{
+	uint32_t counter;
+} TurboWork;
+
+extern TurboConfig turboConfig[TURBO_BUTTONS];
+extern unsigned turbo_ratio;
 
 class dmy_renderer : public renderer
 {
@@ -44,6 +66,5 @@ private:
 	bool rgb565;
 	int32_t prev_joypad_bits;
 
-	unsigned turbo_a;
-	unsigned turbo_b;
+	TurboWork turboWork[TURBO_BUTTONS];
 };
