@@ -146,6 +146,36 @@ struct apu_stat{
 	int wav_enable;
 };
 
+struct apu_work{
+	dword sq1_cur_pos;
+	dword sq2_cur_pos;
+	dword wav_cur_pos;
+	dword noi_cur_pos;
+
+	bool write_1st;
+	int write_bef_clock;
+	int write_clocks;
+
+	dword sq1_cur_sample;
+
+	dword sq2_cur_sample;
+
+	dword wav_cur_pos2;
+	byte wav_cur_sample;
+	byte wav_bef_sample;
+
+ 	int noi_cur_sample;
+
+	int update_counter;
+
+	int render_counter;
+
+	int rand_shift_reg;
+	int rand_bef_degree;
+
+	void init();
+};
+
 struct apu_que {
 	word adr;
 	byte dat;
@@ -366,6 +396,8 @@ private:
 
 	byte mem[0x100];
 	bool b_enable[4];
+
+	apu_work work;
 };
 
 class mbc
