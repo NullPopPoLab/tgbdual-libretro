@@ -118,10 +118,6 @@ void dmy_renderer::refresh() {
 	// if dual gb mode
 	if (audio_2p_mode == 3)
 	{
-		// (bug)
-		// sound broken when both render() called 
-		// maybe conflicts in APU procedure. 
-
 		// mix down to one per channel (dual mono)
 		this->snd_render->render(tmp_stream, SAMPLES_PER_FRAME);
 		for(int i = 0; i < SAMPLES_PER_FRAME; ++i)
