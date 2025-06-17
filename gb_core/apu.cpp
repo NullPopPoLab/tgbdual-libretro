@@ -27,10 +27,24 @@
 #include "gb.h"
 #include <stdlib.h>
 
-static dword sq1_cur_pos=0;
-static dword sq2_cur_pos=0;
-static dword wav_cur_pos=0;
-static dword noi_cur_pos=0;
+void apu_work::init()
+{
+	write_1st=false;
+	sq1_cur_pos=0;
+	sq2_cur_pos=0;
+	wav_cur_pos=0;
+	noi_cur_pos=0;
+	sq1_cur_sample=0;
+	sq2_cur_sample=0;
+	wav_cur_pos2=0;
+	wav_cur_sample=0;
+	wav_bef_sample=0;
+	noi_cur_sample=10000;
+	update_counter=0;
+	render_counter=0;
+	rand_shift_reg=0x7f;
+	rand_bef_degree=0;
+}
 
 apu::apu(gb *ref)
 {
@@ -63,8 +77,11 @@ byte apu::read(word adr)
 
 void apu::write(word adr,byte dat,int clock)
 {
-	static int bef_clock=clock;
-	static int clocks=0;
+	if(!snd->work.write_1st){
+		snd->work.write_1st=true;
+		snd->work.write_bef_clock=clock;
+		snd->work.write_clocks=0;
+	}
 
 	snd->mem[adr-0xFF10]=dat;
 
@@ -77,17 +94,17 @@ void apu::write(word adr,byte dat,int clock)
 
 	snd->process(adr,dat);
 
-	if (bef_clock>clock)
-		bef_clock=clock;
+	if (snd->work.write_bef_clock>clock)
+		snd->work.write_bef_clock=clock;
 
-	clocks+=clock-bef_clock;
+	snd->work.write_clocks+=clock-snd->work.write_bef_clock;
 
-	while (clocks>CLOKS_PER_INTERVAL*(ref_gb->get_cpu()->get_speed()?2:1)){
+	while (snd->work.write_clocks>CLOKS_PER_INTERVAL*(ref_gb->get_cpu()->get_speed()?2:1)){
 		snd->update();
-		clocks-=CLOKS_PER_INTERVAL*(ref_gb->get_cpu()->get_speed()?2:1);
+		snd->work.write_clocks-=CLOKS_PER_INTERVAL*(ref_gb->get_cpu()->get_speed()?2:1);
 	}
 
-	bef_clock=clock;
+	snd->work.write_bef_clock=clock;
 }
 
 void apu::update()
@@ -113,6 +130,8 @@ byte *apu::get_mem()
 
 apu_snd::apu_snd(apu *papu)
 {
+	work.init();
+
 	ref_apu=papu;
 	b_enable[0]=b_enable[1]=b_enable[2]=b_enable[3]=true;
 	b_echo=false;
@@ -199,7 +218,7 @@ void apu_snd::process(word adr,byte dat)
 			stat.sq1_playing=true;
 			stat.sq1_vol=stat.sq1_init_vol;
 			stat.sq1_len=stat.sq1_init_len;
-			if ((!stat.sq1_playing)||(!stat.sq1_vol)) sq1_cur_pos=0;
+			if ((!stat.sq1_playing)||(!stat.sq1_vol)) work.sq1_cur_pos=0;
 		}
 		break;
 	case 0xFF16:
@@ -224,7 +243,7 @@ void apu_snd::process(word adr,byte dat)
 		stat.sq2_freq=stat.sq2_init_freq;
 		stat.sq2_hold=(dat>>6)&1;
 		if (dat&0x80){
-			if ((!stat.sq2_playing)||(!stat.sq2_vol)) sq2_cur_pos=0;
+			if ((!stat.sq2_playing)||(!stat.sq2_vol)) work.sq2_cur_pos=0;
 			stat.sq2_playing=true;
 			stat.sq2_vol=stat.sq2_init_vol;
 			stat.sq2_len=stat.sq2_init_len;
@@ -258,7 +277,7 @@ void apu_snd::process(word adr,byte dat)
 		if (dat&0x80){
 			stat.wav_len=stat.wav_init_len;
 			stat.wav_playing=true;
-			if (!stat.wav_playing) wav_cur_pos=0;
+			if (!stat.wav_playing) work.wav_cur_pos=0;
 		}
 		break;
 	case 0xFF20://noi len
@@ -289,7 +308,7 @@ void apu_snd::process(word adr,byte dat)
 			stat.noi_playing=true;
 			stat.noi_len=stat.noi_init_len;
 			stat.noi_vol=stat.noi_init_vol;
-			if ((!stat.noi_playing)||(!stat.noi_vol)) noi_cur_pos=0;
+			if ((!stat.noi_playing)||(!stat.noi_vol)) work.noi_cur_pos=0;
 		}
 		break;
 	case 0xFF24:
@@ -330,7 +349,6 @@ static int sq_wav_dat[4][8]={
 
 inline short apu_snd::sq1_produce(int freq)
 {
-	static dword cur_sample=0;
 	dword cur_freq;
 	short ret;
 
@@ -338,12 +356,12 @@ inline short apu_snd::sq1_produce(int freq)
 		return 15000;
 
 	if (freq){
-		ret=sq_wav_dat[stat.sq1_type&3][cur_sample]*20000-10000;
+		ret=sq_wav_dat[stat.sq1_type&3][work.sq1_cur_sample]*20000-10000;
 		cur_freq=((freq*8)>0x10000)?0xffff:freq*8;
-		sq1_cur_pos+=(cur_freq<<16)/44100;
-		if (sq1_cur_pos&0xffff0000){
-			cur_sample=(cur_sample+(sq1_cur_pos>>16))&7;
-			sq1_cur_pos&=0xffff;
+		work.sq1_cur_pos+=(cur_freq<<16)/44100;
+		if (work.sq1_cur_pos&0xffff0000){
+			work.sq1_cur_sample=(work.sq1_cur_sample+(work.sq1_cur_pos>>16))&7;
+			work.sq1_cur_pos&=0xffff;
 		}
 	}
 	else
@@ -354,7 +372,6 @@ inline short apu_snd::sq1_produce(int freq)
 
 inline short apu_snd::sq2_produce(int freq)
 {
-	static dword cur_sample=0;
 	dword cur_freq;
 	short ret;
 
@@ -362,12 +379,12 @@ inline short apu_snd::sq2_produce(int freq)
 		return 15000;
 
 	if (freq){
-		ret=sq_wav_dat[stat.sq2_type&3][cur_sample]*20000-10000;
+		ret=sq_wav_dat[stat.sq2_type&3][work.sq2_cur_sample]*20000-10000;
 		cur_freq=((freq*8)>0x10000)?0xffff:freq*8;
-		sq2_cur_pos+=(cur_freq<<16)/44100;
-		if (sq2_cur_pos&0xffff0000){
-			cur_sample=(cur_sample+(sq2_cur_pos>>16))&7;
-			sq2_cur_pos&=0xffff;
+		work.sq2_cur_pos+=(cur_freq<<16)/44100;
+		if (work.sq2_cur_pos&0xffff0000){
+			work.sq2_cur_sample=(work.sq2_cur_sample+(work.sq2_cur_pos>>16))&7;
+			work.sq2_cur_pos&=0xffff;
 		}
 	}
 	else
@@ -378,8 +395,6 @@ inline short apu_snd::sq2_produce(int freq)
 
 inline short apu_snd::wav_produce(int freq,bool interpolation)
 {
-	static dword cur_pos2=0;
-	static byte bef_sample=0,cur_sample=0;
 	dword cur_freq;
 	short ret;
 
@@ -388,21 +403,21 @@ inline short apu_snd::wav_produce(int freq,bool interpolation)
 
 	if (freq){
 		if (interpolation){
-			ret=((cur_sample*2500-15000)*wav_cur_pos+(bef_sample*2500-15000)*(0x10000-wav_cur_pos))/0x10000;
+			ret=((work.wav_cur_sample*2500-15000)*work.wav_cur_pos+(work.wav_bef_sample*2500-15000)*(0x10000-work.wav_cur_pos))/0x10000;
 		}
 		else{
-			ret=cur_sample*2500-15000;
+			ret=work.wav_cur_sample*2500-15000;
 		}
 		cur_freq=(freq>0x10000)?0xffff:freq;
-		wav_cur_pos+=(cur_freq<<16)/44100;
-		if (wav_cur_pos&0xffff0000){
-			bef_sample=cur_sample;
-			cur_pos2=(cur_pos2+(wav_cur_pos>>16))&31;
-			if (cur_pos2&1)
-				cur_sample=mem[0x20+cur_pos2/2]&0xf;
+		work.wav_cur_pos+=(cur_freq<<16)/44100;
+		if (work.wav_cur_pos&0xffff0000){
+			work.wav_bef_sample=work.wav_cur_sample;
+			work.wav_cur_pos2=(work.wav_cur_pos2+(work.wav_cur_pos>>16))&31;
+			if (work.wav_cur_pos2&1)
+				work.wav_cur_sample=mem[0x20+work.wav_cur_pos2/2]&0xf;
 			else
-				cur_sample=mem[0x20+cur_pos2/2]>>4;
-			wav_cur_pos&=0xffff;
+				work.wav_cur_sample=mem[0x20+work.wav_cur_pos2/2]>>4;
+			work.wav_cur_pos&=0xffff;
 		}
 	}
 	else
@@ -411,22 +426,20 @@ inline short apu_snd::wav_produce(int freq,bool interpolation)
 	return ret;
 }
 
-static inline unsigned int _mrand(dword degree)
+static inline unsigned int _mrand(dword degree,apu_work* work)
 {
-	static int shift_reg=0x7f;
-	static int bef_degree=0;
 	int xor_reg=0;
 	int masked;
 	
 	degree=(degree==7)?0:1;
 
-	if (bef_degree!=degree){
-		shift_reg&=(degree?0x7fff:0x7f);
-		if (!shift_reg) shift_reg=degree?0x7fff:0x7f;
+	if (work->rand_bef_degree!=degree){
+		work->rand_shift_reg&=(degree?0x7fff:0x7f);
+		if (!work->rand_shift_reg) work->rand_shift_reg=degree?0x7fff:0x7f;
 	}
-	bef_degree=degree;
+	work->rand_bef_degree=degree;
 
-	masked=shift_reg&3;
+	masked=work->rand_shift_reg&3;
 	while(masked)
 	{
 		xor_reg^=masked&0x01;
@@ -434,12 +447,12 @@ static inline unsigned int _mrand(dword degree)
 	}
 
 	if(xor_reg)
-		shift_reg|=(degree?0x8000:0x80);
+		work->rand_shift_reg|=(degree?0x8000:0x80);
 	else
-		shift_reg&=~(degree?0x8000:0x80);
-	shift_reg>>=1;
+		work->rand_shift_reg&=~(degree?0x8000:0x80);
+	work->rand_shift_reg>>=1;
 
-	return shift_reg;
+	return work->rand_shift_reg;
 }
 /*
 inline short apu_snd::noi_produce(int freq)
@@ -451,11 +464,11 @@ inline short apu_snd::noi_produce(int freq)
 	if (freq){
 		ret=cur_sample;
 		cur_freq=((freq)>44100)?44100:freq;
-		noi_cur_pos+=(cur_freq<<16)/44100;
-		if (noi_cur_pos&0xffff0000){
+		work.noi_cur_pos+=(cur_freq<<16)/44100;
+		if (work.noi_cur_pos&0xffff0000){
 			cur_sample=(_mrand(stat.noi_step)&1)?12000:-10000;
 //			cur_sample=(_mrand(stat.noi_step)&0x1f)*1000;
-			noi_cur_pos&=0xffff;
+			work.noi_cur_pos&=0xffff;
 		}
 	}
 	else
@@ -465,27 +478,26 @@ inline short apu_snd::noi_produce(int freq)
 }*/
 inline short apu_snd::noi_produce(int freq)
 {
- 	static int cur_sample=10000;
  	dword cur_freq;
  	short ret;
  	int sc;
  	if (freq){
- 		ret=cur_sample;
+ 		ret=work.noi_cur_sample;
  		cur_freq=freq;
- 		noi_cur_pos+=cur_freq;
+ 		work.noi_cur_pos+=cur_freq;
  		sc=0;
- 		while(noi_cur_pos>44100){
+ 		while(work.noi_cur_pos>44100){
  			if(sc==0)
- 				cur_sample=(_mrand(stat.noi_step)&1)?12000:-10000;
+ 				work.noi_cur_sample=(_mrand(stat.noi_step,&work)&1)?12000:-10000;
 			else
- 				cur_sample+=(_mrand(stat.noi_step)&1)?12000:-10000;
-//			cur_sample=(_mrand(stat.noi_step)&0x1f)*1000;
-			noi_cur_pos-=44100;
+ 				work.noi_cur_sample+=(_mrand(stat.noi_step,&work)&1)?12000:-10000;
+//			work.noi_cur_sample=(_mrand(stat.noi_step,&work)&0x1f)*1000;
+			work.noi_cur_pos-=44100;
  			sc++;
  		}
  		
 		if(sc > 0)
- 			cur_sample /= sc;
+ 			work.noi_cur_sample /= sc;
  		
 		
 	}
@@ -496,15 +508,13 @@ inline short apu_snd::noi_produce(int freq)
 
 void apu_snd::update()
 {
-	static int counter=0;
-
 	if (stat.sq1_playing&&stat.master_enable){
-		if (stat.sq1_env_speed&&(counter%(4*stat.sq1_env_speed)==0)){
+		if (stat.sq1_env_speed&&(work.update_counter%(4*stat.sq1_env_speed)==0)){
 			stat.sq1_vol+=(stat.sq1_env_dir?1:-1);
 			if (stat.sq1_vol<0) stat.sq1_vol=0;
 			if (stat.sq1_vol>15) stat.sq1_vol=15;
 		}
-		if (stat.sq1_sw_time&&stat.sq1_sw_shift&&(counter%(2*stat.sq1_sw_time)==0)){
+		if (stat.sq1_sw_time&&stat.sq1_sw_shift&&(work.update_counter%(2*stat.sq1_sw_time)==0)){
 			if (stat.sq1_sw_dir)
 				stat.sq1_freq=stat.sq1_freq-(stat.sq1_freq>>stat.sq1_sw_shift);
 			else
@@ -519,7 +529,7 @@ void apu_snd::update()
 	}
 
 	if (stat.sq2_playing&&stat.master_enable){
-		if (stat.sq2_env_speed&&(counter%(4*stat.sq2_env_speed)==0)){
+		if (stat.sq2_env_speed&&(work.update_counter%(4*stat.sq2_env_speed)==0)){
 			stat.sq2_vol+=(stat.sq2_env_dir?1:-1);
 			if (stat.sq2_vol<0) stat.sq2_vol=0;
 			if (stat.sq2_vol>15) stat.sq2_vol=15;
@@ -542,7 +552,7 @@ void apu_snd::update()
 	}
 
 	if (stat.noi_playing&&stat.master_enable){
-		if (stat.noi_env_speed&&(counter%(4*stat.noi_env_speed)==0)){
+		if (stat.noi_env_speed&&(work.update_counter%(4*stat.noi_env_speed)==0)){
 			stat.noi_vol+=(stat.noi_env_dir?1:-1);
 			if (stat.noi_vol<0) stat.noi_vol=0;
 			if (stat.noi_vol>15) stat.noi_vol=15;
@@ -554,13 +564,12 @@ void apu_snd::update()
 		}
 	}
 
-	counter++;
+	work.update_counter++;
 }
 
 void apu_snd::render(short *buf,int sample)
 {
 	static short filter[8820*2];
-	static int counter=0;
 
 	memcpy(&stat_tmp,&stat,sizeof(stat));
 	memcpy(&stat,&stat_cpy,sizeof(stat_cpy));
@@ -620,17 +629,17 @@ void apu_snd::render(short *buf,int sample)
 //			tmp_r/=2;
 			int ttmp_l=tmp_l,ttmp_r=tmp_r;
 			ttmp_l*=5;ttmp_r*=5;
-			ttmp_l+=filter[counter*2]*2;
-			ttmp_r+=filter[counter*2+1]*2;
+			ttmp_l+=filter[work.render_counter*2]*2;
+			ttmp_r+=filter[work.render_counter*2+1]*2;
 			ttmp_l/=5;
 			ttmp_r/=5;
 			tmp_l=ttmp_l;
 			tmp_r=ttmp_r;
-			filter[counter*2]=tmp_l;
-			filter[counter*2+1]=tmp_r;
-			counter++;
-			if (counter>=2000)
-				counter=0;
+			filter[work.render_counter*2]=tmp_l;
+			filter[work.render_counter*2+1]=tmp_r;
+			work.render_counter++;
+			if (work.render_counter>=2000)
+				work.render_counter=0;
 //			tmp_l/=2;
 //			tmp_r/=2;
 		}
