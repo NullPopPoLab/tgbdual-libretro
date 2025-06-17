@@ -41,6 +41,7 @@ static const struct retro_variable vars_dual[] = {
     { "tgbdual_switch_screens", "Switch player screens; normal|switched" },
     { "tgbdual_single_screen_mp", "Show player screens; both players|player 1 only|player 2 only" },
     { "tgbdual_audio_output", "Audio output; Game Boy #1|Game Boy #2|Both Mix|Muted" },
+    { "tgbdual_audio_3ch", "3ch mixing in Both Mix; enabled|disabled" },
     { "tgbdual_turbo_speed_a", "Turbo Speed for Button A; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
     { "tgbdual_turbo_speed_b", "Turbo Speed for Button B; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
     { "tgbdual_turbo_speed_start", "Turbo Speed for Button Start; 5|6|7|8|9|10|11|12|13|14|15|16|1|2|3|4" },
@@ -101,6 +102,7 @@ bool gblink_enable                       = false;
 bool dual_control                        = false;
 int audio_2p_mode = 1; // player 1 side 
 bool audio_2p_mode_switched=false; // indicate controlled in renderer 
+bool audio_3ch=true; // mix center channel with dual GB 
 // used to make certain core options only take effect once on core startup
 bool already_checked_options             = false;
 bool libretro_supports_persistent_buffer = false;
@@ -418,6 +420,14 @@ static void check_variables(void)
 		else if (!strcmp(var.value, "Both Mix"))
 		 audio_2p_mode = 3;
 		else audio_2p_mode = 0;
+	}
+
+   var.key = "tgbdual_audio_3ch";
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+	{
+		if (!strcmp(var.value, "enabled"))
+		 audio_3ch = true;
+		else audio_3ch = false;
 	}
 
 	// turbo speed 

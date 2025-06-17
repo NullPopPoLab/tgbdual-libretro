@@ -41,6 +41,7 @@ extern bool dual_control;
 
 extern int audio_2p_mode;
 extern bool audio_2p_mode_switched;
+extern bool audio_3ch;
 extern bool get_drive_eject_state(unsigned drv);
 
 #define MSG_FRAMES 60
@@ -118,13 +119,34 @@ void dmy_renderer::refresh() {
 	// if dual gb mode
 	if (audio_2p_mode == 3)
 	{
-		// mix down to one per channel (dual mono)
-		this->snd_render->render(tmp_stream, SAMPLES_PER_FRAME);
-		for(int i = 0; i < SAMPLES_PER_FRAME; ++i)
-		{
-			// mono mix 
-			int l = tmp_stream[(i*2)+0], r = tmp_stream[(i*2)+1];
-			stream[(i*2)+which_gb] = int16_t( (l+r) / 2 );
+		if(audio_3ch){
+			// pseudo 3ch mix 
+			this->snd_render->render(which_gb?tmp_stream:stream, SAMPLES_PER_FRAME);
+			if(which_gb){
+				for(int i = 0; i < SAMPLES_PER_FRAME; ++i)
+				{
+					int l1 = stream[(i*2)+0], r1 = stream[(i*2)+1];
+					int l2 = tmp_stream[(i*2)+0], r2 = tmp_stream[(i*2)+1];
+					// center ch 
+					int c=(r1+l2)/2;
+					// mix to 2ch 
+					int l=l1-(l1>>1)+(c>>1);
+					int r=r2-(r2>>1)+(c>>1);
+
+					stream[(i*2)] = int16_t( l );
+					stream[(i*2)+1] = int16_t( r );
+				}
+			}
+		}
+		else{
+			// mix down to one per channel (dual mono)
+			this->snd_render->render(tmp_stream, SAMPLES_PER_FRAME);
+			for(int i = 0; i < SAMPLES_PER_FRAME; ++i)
+			{
+				// mono mix 
+				int l = tmp_stream[(i*2)+0], r = tmp_stream[(i*2)+1];
+				stream[(i*2)+which_gb] = int16_t( (l+r) / 2 );
+			}
 		}
 	}
 	else if (audio_2p_mode == which_gb+1)
